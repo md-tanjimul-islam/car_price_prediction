@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Car Price Predictor</title>
+<style>
+  :root{--bg:#f4f6fb;--card:#fff;--ink:#1c2333;--muted:#6b7280;--brand:#2563eb;--brand-d:#1d4ed8;--line:#e5e7eb;--ok:#047857}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:32px 20px 64px;text-align:center}
+  header h1{margin:0 0 6px;font-size:1.9rem} header p{margin:0;opacity:.9}
+  main{max-width:760px;margin:-40px auto 40px;padding:0 16px}
+  .card{background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(15,23,42,.08);padding:24px}
+  .tabs{display:flex;gap:8px;margin-bottom:18px}
+  .tab{flex:1;padding:10px;border:1px solid var(--line);background:#f9fafb;border-radius:10px;cursor:pointer;font-weight:600;color:var(--muted)}
+  .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}}
+  label{display:block;font-size:.85rem;font-weight:600;margin-bottom:5px}
+  input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:1rem;background:#fff}
+  input:focus,select:focus{outline:2px solid #bfdbfe;border-color:var(--brand)}
+  small{color:var(--muted);font-size:.75rem}
+  .full{grid-column:1/-1}
+  button.primary{width:100%;margin-top:18px;padding:13px;border:0;border-radius:10px;background:var(--brand);color:#fff;font-size:1.05rem;font-weight:700;cursor:pointer}
+  button.primary:hover{background:var(--brand-d)} button:disabled{opacity:.6;cursor:wait}
+  .result{margin-top:20px;padding:20px;border-radius:14px;background:#ecfdf5;border:1px solid #a7f3d0;text-align:center;display:none}
+  .result .big{font-size:2.2rem;font-weight:800;color:var(--ok)}
+  .result .range{color:#065f46;margin-top:4px}
+  .result .note{font-size:.8rem;color:#92400e;background:#fffbeb;border-radius:8px;padding:8px;margin-top:10px}
+  .error{margin-top:14px;padding:12px;border-radius:10px;background:#fef2f2;color:#b91c1c;display:none}
+  #chat{height:340px;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:10px}
+  .msg{max-width:82%;padding:10px 14px;border-radius:14px;line-height:1.4}
+  .bot{background:#eef2ff;align-self:flex-start;border-bottom-left-radius:4px}
+  .me{background:var(--brand);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{padding:8px 14px;border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:999px;cursor:pointer;font-weight:600}
+  .chip:hover{background:var(--brand);color:#fff}
+  .chatinput{display:flex;gap:8px;margin-top:12px} .chatinput button{padding:0 18px;border:0;border-radius:10px;background:var(--brand);color:#fff;font-weight:700;cursor:pointer}
+  .footer{margin-top:18px;text-align:center;color:var(--muted);font-size:.8rem}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🚗 Used Car Price Predictor</h1>
+  <p>Get an instant resale estimate powered by machine learning</p>
+</header>
+
+<main>
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" data-tab="form">📝 Quick form</button>
+    <button class="tab" data-tab="chat">💬 Ask the assistant</button>
+  </div>
+
+  <!-- ===================== FORM ===================== -->
+  <section id="tab-form">
+    <div class="grid">
+      <div class="full">
+        <label for="Car_Name">Car / bike name</label>
+        <input id="Car_Name" list="names" placeholder="e.g. city, fortuner, Royal Enfield Classic 350" autocomplete="off">
+        <datalist id="names">{% for n in car_names %}<option value="{{ n }}">{% endfor %}</datalist>
+      </div>
+      <div><label for="Year">Year of purchase</label>
+        <input id="Year" type="number" min="1995" max="{{ current_year }}" placeholder="e.g. 2015"></div>
+      <div><label for="Present_Price">Current showroom price (lakh ₹)</label>
+        <input id="Present_Price" type="number" step="0.01" min="0.1" placeholder="e.g. 9.5"><small>1 lakh = ₹100,000</small></div>
+      <div><label for="Driven_kms">Kilometres driven</label>
+        <input id="Driven_kms" type="number" min="0" placeholder="e.g. 45000"></div>
+      <div><label for="Owner">Previous owners</label>
+        <select id="Owner"><option value="0">0 (first owner)</option><option value="1">1</option><option value="2">2</option><option value="3">3+</option></select></div>
+      <div><label for="Fuel_Type">Fuel type</label>
+        <select id="Fuel_Type"><option>Petrol</option><option>Diesel</option><option value="Cng">CNG</option></select></div>
+      <div><label for="Transmission">Transmission</label>
+        <select id="Transmission"><option>Manual</option><option>Automatic</option></select></div>
+      <div class="full"><label for="Selling_type">Seller type</label>
+        <select id="Selling_type"><option>Dealer</option><option>Individual</option></select></div>
+    </div>
+    <button class="primary" id="btn">Predict selling price</button>
+    <div class="error" id="err"></div>
+    <div class="result" id="res"></div>
+  </section>
+
+  <!-- ===================== CHAT ===================== -->
+  <section id="tab-chat" hidden>
+    <div id="chat"></div>
+    <div class="chips" id="chips"></div>
+    <div class="chatinput" id="chatinput" hidden>
+      <input id="chatbox" placeholder="Type your answer…">
+      <button id="send">Send</button>
+    </div>
+  </section>
+</div>
+
+<p class="footer">Model: {{ model_name }} · trained on {{ n_rows }} listings · test R² {{ metrics.R2 }} · typical error ≈ ₹{{ (metrics.MAE * 100000) | round(-3) | int }}<br>
+Estimates are indicative only and not a formal valuation.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const CURRENT_YEAR = {{ current_year }};
+const fmtINR = n => "₹" + Number(n).toLocaleString("en-IN");
+
+function resultHTML(r){
+  const notes = (r.notes||[]).map(n=>`<div class="note">ℹ️ ${n}</div>`).join("");
+  return `<div>Estimated selling price</div>
+          <div class="big">${fmtINR(r.price_inr)}</div>
+          <div>(${r.price_lakh} lakh)</div>
+          <div class="range">Likely range: ${fmtINR(r.low_inr)} – ${fmtINR(r.high_inr)}</div>${notes}`;
+}
+async function callPredict(payload){
+  const res = await fetch("/predict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  return res.json();
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+  $("tab-form").hidden = t.dataset.tab!=="form";
+  $("tab-chat").hidden = t.dataset.tab!=="chat";
+  if(t.dataset.tab==="chat" && !$("chat").children.length) startChat();
+});
+
+/* ---------- form ---------- */
+$("btn").onclick = async ()=>{
+  const p = {}; ["Car_Name","Year","Present_Price","Driven_kms","Owner","Fuel_Type","Transmission","Selling_type"].forEach(k=>p[k]=$(k).value);
+  $("err").style.display = $("res").style.display = "none";
+  $("btn").disabled = true; $("btn").textContent = "Predicting…";
+  try{
+    const r = await callPredict(p);
+    if(r.ok){ $("res").innerHTML = resultHTML(r); $("res").style.display="block"; }
+    else { $("err").textContent = r.error; $("err").style.display="block"; }
+  }catch(e){ $("err").textContent="Network error. Please try again."; $("err").style.display="block"; }
+  $("btn").disabled = false; $("btn").textContent = "Predict selling price";
+};
+
+/* ---------- assistant ---------- */
+const steps = [
+  {k:"Car_Name", q:"Hi! 👋 I'll estimate your resale price. Which car or bike is it? (e.g. city, swift, Royal Enfield Classic 350)", type:"text"},
+  {k:"Year", q:"Which year did you buy it?", type:"number", check:v=>v>=1995&&v<=CURRENT_YEAR, bad:`Please enter a year between 1995 and ${CURRENT_YEAR}.`},
+  {k:"Present_Price", q:"What is the current showroom price of a new one, in lakh ₹? (e.g. 9.5)", type:"number", check:v=>v>=0.1&&v<=500, bad:"Enter a value between 0.1 and 500 lakh."},
+  {k:"Driven_kms", q:"How many kilometres has it been driven?", type:"number", check:v=>v>=0&&v<=1000000, bad:"Enter a value between 0 and 1,000,000."},
+  {k:"Fuel_Type", q:"What fuel does it use?", type:"choice", opts:["Petrol","Diesel","Cng"]},
+  {k:"Transmission", q:"Manual or automatic?", type:"choice", opts:["Manual","Automatic"]},
+  {k:"Selling_type", q:"Are you selling through a dealer or as an individual?", type:"choice", opts:["Dealer","Individual"]},
+  {k:"Owner", q:"How many previous owners?", type:"choice", opts:["0","1","2","3"]},
+];
+let si = 0, answers = {};
+const bubble = (txt,cls)=>{const d=document.createElement("div");d.className="msg "+cls;d.textContent=txt;$("chat").appendChild(d);$("chat").scrollTop=1e6;};
+
+function startChat(){ si=0; answers={}; $("chat").innerHTML=""; ask(); }
+function ask(){
+  const s = steps[si]; bubble(s.q,"bot"); $("chips").innerHTML="";
+  $("chatinput").hidden = s.type==="choice";
+  $("chatbox").type = s.type==="number" ? "number" : "text"; $("chatbox").value="";
+  if(s.type==="choice") s.opts.forEach(o=>{const c=document.createElement("button");c.className="chip";c.textContent=o;c.onclick=()=>answer(o);$("chips").appendChild(c);});
+  else $("chatbox").focus();
+}
+async function answer(val){
+  const s = steps[si]; val = String(val).trim(); if(!val) return;
+  if(s.type==="number" && (isNaN(+val) || !s.check(+val))){ bubble(val,"me"); bubble(s.bad||"Please enter a number.","bot"); $("chatbox").value=""; return; }
+  bubble(val,"me"); answers[s.k]=val; si++;
+  if(si<steps.length) return ask();
+  $("chips").innerHTML=""; $("chatinput").hidden=true; bubble("Crunching the numbers… 🔎","bot");
+  const r = await callPredict(answers);
+  if(r.ok){
+    bubble(`Estimated selling price: ${fmtINR(r.price_inr)} (${r.price_lakh} lakh). Likely range: ${fmtINR(r.low_inr)} – ${fmtINR(r.high_inr)}.`,"bot");
+    (r.notes||[]).forEach(n=>bubble("ℹ️ "+n,"bot"));
+  } else bubble("Sorry — "+r.error,"bot");
+  const c=document.createElement("button");c.className="chip";c.textContent="Start a new estimate";c.onclick=startChat;$("chips").appendChild(c);
+}
+$("send").onclick = ()=>answer($("chatbox").value);
+$("chatbox").addEventListener("keydown",e=>{if(e.key==="Enter")answer($("chatbox").value);});
+</script>
+</body>
+</html>

@@ -1,88 +1,147 @@
+"""
+app.py
+------
+Flask web app: a form + a guided chat assistant that predict a used vehicle's
+selling price using the saved pipeline (models/car_price_pipeline_v1.pkl).
+
+Local:   python app.py            ->  http://127.0.0.1:5000
+Render:  gunicorn app:app
+"""
+import json
 import os
-import datetime
+from datetime import date
+
 import joblib
+import numpy as np
 import pandas as pd
-import streamlit as st
+from flask import Flask, jsonify, render_template, request
 
-# 1. Page Configuration
-st.set_page_config(
-    page_title="Comprehensive Car Price Predictor",
-    page_icon="🚗",
-    layout="centered"
-)
+from src.preprocess import RAW_FEATURES, REFERENCE_YEAR, normalize_name
+from src.train import METRICS_PATH, MODEL_PATH, train_and_save
 
-# 2. Load Model Artifact Safely
-MODEL_PATH = "models/car_price_pipeline_v1.pkl"
+app = Flask(__name__)
 
-@st.cache_resource
-def load_model():
-    if not os.path.exists(MODEL_PATH):
-        return None
-    return joblib.load(MODEL_PATH)
 
-model = load_model()
+# --------------------------------------------------------------------------
+# Load model (retrain automatically if the .pkl is missing or was built with a
+# different scikit-learn version than the one installed on the server)
+# --------------------------------------------------------------------------
+def load_artifacts():
+    try:
+        model = joblib.load(MODEL_PATH)
+        meta = json.loads(METRICS_PATH.read_text())
+    except Exception as exc:                      # noqa: BLE001
+        print(f"[app] could not load model ({exc}); retraining...")
+        meta = train_and_save(verbose=False)
+        model = joblib.load(MODEL_PATH)
+    return model, meta
 
-# 3. Streamlit UI Layout
-st.title("🚗 Comprehensive Car Price Prediction")
-st.markdown(
-    "Production machine learning application leveraging **every vehicle feature** "
-    "(Year, Showroom Price, Kilometers, Fuel Type, Transmission, Selling Type, and Previous Owners)[cite: 1, 2]."
-)
 
-if model is None:
-    st.error(
-        f"🚨 Model artifact not found at `{MODEL_PATH}`. "
-        "Please run `python src/train.py` first to generate the `.pkl` file."
+MODEL, META = load_artifacts()
+KNOWN_NAMES = set(META["car_names"])
+CURRENT_YEAR = date.today().year
+
+CHOICES = {
+    "Fuel_Type": {"Petrol", "Diesel", "Cng"},
+    "Selling_type": {"Dealer", "Individual"},
+    "Transmission": {"Manual", "Automatic"},
+}
+
+
+# --------------------------------------------------------------------------
+# Validation + prediction
+# --------------------------------------------------------------------------
+def parse_input(data: dict) -> dict:
+    """Validate raw form/JSON values. Raises ValueError with a friendly message."""
+    try:
+        name = normalize_name(data.get("Car_Name", ""))
+        if not name:
+            raise ValueError("Please enter the car / bike name.")
+        year = int(float(data.get("Year", "")))
+        present = float(data.get("Present_Price", ""))
+        kms = float(data.get("Driven_kms", ""))
+        owner = int(float(data.get("Owner", 0)))
+    except (TypeError, ValueError) as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith("Please"):
+            raise
+        raise ValueError("Please fill every field with valid numbers.") from None
+
+    fuel = str(data.get("Fuel_Type", "")).strip().title()
+    seller = str(data.get("Selling_type", "")).strip().title()
+    trans = str(data.get("Transmission", "")).strip().title()
+    for key, val in (("Fuel_Type", fuel), ("Selling_type", seller), ("Transmission", trans)):
+        if val not in CHOICES[key]:
+            raise ValueError(f"Invalid value for {key.replace('_', ' ')}.")
+
+    if not 1995 <= year <= CURRENT_YEAR:
+        raise ValueError(f"Year must be between 1995 and {CURRENT_YEAR}.")
+    if not 0.1 <= present <= 500:
+        raise ValueError("Showroom price must be between 0.1 and 500 lakh.")
+    if not 0 <= kms <= 1_000_000:
+        raise ValueError("Kilometres driven must be between 0 and 1,000,000.")
+    if owner < 0 or owner > 5:
+        raise ValueError("Previous owners must be between 0 and 5.")
+
+    return {"Car_Name": name, "Year": year, "Present_Price": present,
+            "Driven_kms": kms, "Fuel_Type": fuel, "Selling_type": seller,
+            "Transmission": trans, "Owner": owner}
+
+
+def predict_price(row: dict) -> dict:
+    X = pd.DataFrame([row])[RAW_FEATURES]
+    price = float(MODEL.predict(X)[0])
+    price = float(np.clip(price, 0.05, row["Present_Price"]))   # can't beat new price
+
+    lo = price * float(np.exp(META["oof_residual_log_q10"]))
+    hi = price * float(np.exp(META["oof_residual_log_q90"]))
+    lo, hi = max(0.05, min(lo, price)), min(row["Present_Price"], max(hi, price))
+
+    notes = []
+    if row["Car_Name"] not in KNOWN_NAMES:
+        notes.append("This model name wasn't in the training data, so the estimate "
+                     "relies mostly on price, age, mileage and fuel/transmission.")
+    if row["Year"] > REFERENCE_YEAR:
+        notes.append(f"The model was trained on listings up to {REFERENCE_YEAR}; "
+                     "newer vehicles are treated as the newest age bracket.")
+    return {
+        "price_lakh": round(price, 2),
+        "low_lakh": round(lo, 2),
+        "high_lakh": round(hi, 2),
+        "price_inr": int(round(price * 100_000, -2)),
+        "low_inr": int(round(lo * 100_000, -3)),
+        "high_inr": int(round(hi * 100_000, -3)),
+        "notes": notes,
+    }
+
+
+# --------------------------------------------------------------------------
+# Routes
+# --------------------------------------------------------------------------
+@app.route("/")
+def index():
+    return render_template(
+        "index.html",
+        car_names=sorted(KNOWN_NAMES),
+        current_year=CURRENT_YEAR,
+        metrics=META["test"],
+        model_name=META["best_model"],
+        n_rows=META["n_rows"],
     )
-else:
-    with st.form("prediction_form"):
-        st.subheader("Enter All Vehicle Parameters")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            car_name = st.text_input("Car Name / Model", value="swift")
-            year = st.number_input("Manufacturing Year", min_value=1990, max_value=2026, value=2018)
-            present_price = st.number_input("Present Showroom Price (Lakhs)", min_value=0.0, value=6.87, format="%.2f")
-            driven_kms = st.number_input("Kilometers Driven", min_value=0, value=42450)
-            
-        with col2:
-            fuel_type = st.selectbox("Fuel Type", ["Petrol", "Diesel", "CNG"])
-            selling_type = st.selectbox("Selling Type", ["Dealer", "Individual"])
-            transmission = st.selectbox("Transmission", ["Manual", "Automatic"])
-            owner = st.number_input("Previous Owners (0, 1, 2, 3...)", min_value=0, max_value=5, value=0)
-            
-        submitted = st.form_submit_button("Calculate Estimated Price")
-        
-    if submitted:
-        # Build comprehensive raw input dictionary containing every single feature
-        input_data = pd.DataFrame({
-            'Car_Name': [car_name],
-            'Year': [year],
-            'Present_Price': [present_price],
-            'Driven_kms': [driven_kms],
-            'Fuel_Type': [fuel_type],
-            'Selling_type': [selling_type],
-            'Transmission': [transmission],
-            'Owner': [owner]
-        })
-        
-        # Apply identical feature engineering transformations matching training pipeline
-        current_year = datetime.datetime.now().year
-        input_data['Car_Age'] = current_year - input_data['Year']
-        input_data = input_data.drop(columns=['Year'])
-        
-        input_data['Brand'] = input_data['Car_Name'].apply(lambda x: str(x).split()[0].lower())
-        input_data = input_data.drop(columns=['Car_Name'])
-        
-        # Multi-variable interaction features ensuring every change heavily alters output scores
-        input_data['Kms_Per_Year'] = input_data['Driven_kms'] / (input_data['Car_Age'] + 1)
-        input_data['Usage_Intensity'] = input_data['Driven_kms'] * input_data['Car_Age']
-        input_data['Owner_Penalty_Factor'] = input_data['Owner'] * input_data['Present_Price']
-        
-        # Execute real-time inference prediction
-        prediction = model.predict(input_data)[0]
-        
-        # Display Results
-        st.markdown("---")
-        st.success(f"### Estimated Reselling Price: **{max(0.0, prediction):.2f} Lakhs**")
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        return jsonify({"ok": True, **predict_price(parse_input(data))})
+    except ValueError as err:
+        return jsonify({"ok": False, "error": str(err)}), 400
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "model": META["best_model"]})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
