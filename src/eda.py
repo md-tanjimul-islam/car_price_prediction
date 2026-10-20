@@ -1,12 +1,5 @@
-"""
-eda.py
-------
-Exploratory data analysis. Prints a summary and saves charts to reports/figures/.
-
-Run from the project root:   python -m src.eda
-"""
 import matplotlib
-matplotlib.use("Agg")                      # no display needed
+matplotlib.use("Agg")                     
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -80,7 +73,7 @@ def main():
         a.set_title(f"{c} vs Selling_Price")
     save("05_numeric_vs_price")
 
-    # 6. log-log relationship (why a log target works well)
+    # 6. log-log relationship 
     plt.figure(figsize=(6, 5))
     sns.scatterplot(x=np.log1p(df["Present_Price"]), y=np.log1p(df["Selling_Price"]),
                     hue=df["Car_Age"], palette="viridis")

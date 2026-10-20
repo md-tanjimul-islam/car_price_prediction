@@ -54,7 +54,6 @@
     <button class="tab" data-tab="chat">💬 Ask the assistant</button>
   </div>
 
-  <!-- ===================== FORM ===================== -->
   <section id="tab-form">
     <div class="grid">
       <div class="full">
@@ -81,8 +80,7 @@
     <div class="error" id="err"></div>
     <div class="result" id="res"></div>
   </section>
-
-  <!-- ===================== CHAT ===================== -->
+>
   <section id="tab-chat" hidden>
     <div id="chat"></div>
     <div class="chips" id="chips"></div>
@@ -114,7 +112,6 @@ async function callPredict(payload){
   return res.json();
 }
 
-/* ---------- tabs ---------- */
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
   $("tab-form").hidden = t.dataset.tab!=="form";
@@ -122,7 +119,6 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   if(t.dataset.tab==="chat" && !$("chat").children.length) startChat();
 });
 
-/* ---------- form ---------- */
 $("btn").onclick = async ()=>{
   const p = {}; ["Car_Name","Year","Present_Price","Driven_kms","Owner","Fuel_Type","Transmission","Selling_type"].forEach(k=>p[k]=$(k).value);
   $("err").style.display = $("res").style.display = "none";
@@ -135,7 +131,6 @@ $("btn").onclick = async ()=>{
   $("btn").disabled = false; $("btn").textContent = "Predict selling price";
 };
 
-/* ---------- assistant ---------- */
 const steps = [
   {k:"Car_Name", q:"Hi! 👋 I'll estimate your resale price. Which car or bike is it? (e.g. city, swift, Royal Enfield Classic 350)", type:"text"},
   {k:"Year", q:"Which year did you buy it?", type:"number", check:v=>v>=1995&&v<=CURRENT_YEAR, bad:`Please enter a year between 1995 and ${CURRENT_YEAR}.`},

@@ -1,12 +1,3 @@
-"""
-train.py
---------
-Trains several regression models on the FULL cleaned dataset, compares them with
-repeated cross-validation, tunes the best candidates, evaluates on a held-out
-test set, then refits the winner on all data and saves it.
-
-Run from the project root:   python -m src.train
-"""
 import json
 import warnings
 
@@ -106,7 +97,7 @@ def train_and_save(verbose: bool = True) -> dict:
     log("\n[tune] hyper-parameter search for every candidate")
     inner_cv = KFold(5, shuffle=True, random_state=RANDOM_STATE)
     for name, space in search_spaces.items():
-        if name == "Ridge":   # tiny grid -> exhaustive search
+        if name == "Ridge":   
             rs = GridSearchCV(candidates[name], space, cv=inner_cv, scoring="r2", n_jobs=-1)
         else:
             rs = RandomizedSearchCV(candidates[name], space, n_iter=15, cv=inner_cv,
@@ -132,9 +123,8 @@ def train_and_save(verbose: bool = True) -> dict:
     log_resid = np.log1p(y.values) - np.log1p(np.clip(oof, 0, None))
     lo, hi = np.quantile(log_resid, [0.10, 0.90])
 
-    # ---- 5. refit on ALL data (use every row) and save
-    final = clone(best)   # same tuned hyper-parameters, refit on every row
-    final.fit(X, y)
+    # ---- 5. refit on ALL data and save
+    final = clone(best)   
     final_metrics = evaluate(final, X, y)
 
     MODEL_DIR.mkdir(exist_ok=True)

@@ -1,12 +1,3 @@
-"""
-preprocess.py
--------------
-Data loading, cleaning, feature engineering and the sklearn preprocessing
-step used by BOTH training (src/train.py) and the web app (app.py).
-
-The feature engineering lives inside the saved pipeline, so the website only
-needs to send the raw form values (Car_Name, Year, Present_Price, ...).
-"""
 from pathlib import Path
 
 import numpy as np
@@ -57,9 +48,6 @@ CATEGORICAL_FEATURES = ["Fuel_Type", "Selling_type", "Transmission",
                         "Vehicle_Type", "Brand", "Model"]
 
 
-# --------------------------------------------------------------------------
-# Helpers
-# --------------------------------------------------------------------------
 def normalize_name(name: object) -> str:
     """lower-case, strip and collapse repeated spaces ('Bajaj  ct 100' -> 'bajaj ct 100')."""
     return " ".join(str(name).lower().split())
@@ -78,10 +66,6 @@ def get_brand(name: object) -> str:
             return "honda" if b == "activa" else b
     return "other"
 
-
-# --------------------------------------------------------------------------
-# 1. Loading + cleaning (training only)
-# --------------------------------------------------------------------------
 def load_data(path: Path = DATA_PATH) -> pd.DataFrame:
     return pd.read_csv(path)
 
@@ -111,9 +95,6 @@ def clean_data(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
     return df
 
 
-# --------------------------------------------------------------------------
-# 2. Feature engineering (runs inside the pipeline)
-# --------------------------------------------------------------------------
 def engineer_features(X: pd.DataFrame) -> pd.DataFrame:
     """Create model features from the raw columns."""
     X = X.copy()

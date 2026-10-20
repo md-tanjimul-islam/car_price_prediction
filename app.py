@@ -1,12 +1,3 @@
-"""
-app.py
-------
-Flask web app: a form + a guided chat assistant that predict a used vehicle's
-selling price using the saved pipeline (models/car_price_pipeline_v1.pkl).
-
-Local:   python app.py            ->  http://127.0.0.1:5000
-Render:  gunicorn app:app
-"""
 import json
 import os
 from datetime import date
@@ -22,10 +13,6 @@ from src.train import METRICS_PATH, MODEL_PATH, train_and_save
 app = Flask(__name__)
 
 
-# --------------------------------------------------------------------------
-# Load model (retrain automatically if the .pkl is missing or was built with a
-# different scikit-learn version than the one installed on the server)
-# --------------------------------------------------------------------------
 def load_artifacts():
     try:
         model = joblib.load(MODEL_PATH)
@@ -48,9 +35,6 @@ CHOICES = {
 }
 
 
-# --------------------------------------------------------------------------
-# Validation + prediction
-# --------------------------------------------------------------------------
 def parse_input(data: dict) -> dict:
     """Validate raw form/JSON values. Raises ValueError with a friendly message."""
     try:
@@ -114,9 +98,6 @@ def predict_price(row: dict) -> dict:
     }
 
 
-# --------------------------------------------------------------------------
-# Routes
-# --------------------------------------------------------------------------
 @app.route("/")
 def index():
     return render_template(
