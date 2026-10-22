@@ -149,17 +149,6 @@ python app.py                     # open http://127.0.0.1:5000
 
 ---
 
-## ☁️ Deployment (Render)
-
-- **Build command:** `pip install -r requirements.txt`
-- **Start command:** `gunicorn app:app`
-- **Environment variable:** `PYTHON_VERSION=3.11.9`
-- **Health check:** `/health`
-
-Config is included in `render.yaml`. The `models/` folder is committed so the app starts without retraining.
-
----
-
 ## ⚠️ Limitations
 
 - The dataset is small (301 rows) and a snapshot up to 2018 from India, so estimates for much newer vehicles or unseen models are extrapolations.
